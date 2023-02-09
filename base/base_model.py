@@ -21,11 +21,3 @@ class BaseModel(nn.Module):
         tot_parameters = sum([p.numel() for p in self.parameters()])
         trainable_params = sum([p.numel() for p in self.parameters() if p.requires_grad])
         return super().__str__() + '\nTotal parameters {} \nTrainable parameters: {}'.format(tot_parameters, trainable_params)
-    
-    @abstractmethod
-    def train(self, dataloader, epochs):
-        """
-        Train pass logic
-        :return: Model output
-        """
-        raise NotImplementedError
