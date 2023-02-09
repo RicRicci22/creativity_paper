@@ -1,10 +1,14 @@
 {
-    "name": "Creativity_network",
+    "name": "creativity_network",
     "n_gpu": 1,
 
     "arch": {
         "type": "CreativityModel",
-        "args": {}
+        "args":{
+            "backbone_name":"resnet18",
+            "hidden_size":512, 
+            "latent_size":20
+        }
     },
     "data_loader": {
         "type": "UAVDataLoader",
@@ -22,7 +26,7 @@
         "type": "Adam",
         "args":{
             "lr": 0.001,
-            "weight_decay": 0,
+            "weight_decay": 1e-8,
             "amsgrad": true
         }
     },

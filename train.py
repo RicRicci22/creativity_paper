@@ -2,11 +2,14 @@ import argparse
 import collections
 from parse_config import ConfigParser
 
-
 import models.creativity_model as module_arch
 import data_loader.data_loaders as module_data
+import models.loss as module_loss
+import models.metric as module_metric
 import torch
 import numpy as np 
+from trainer import Trainer
+from utils import prepare_device
 
 # fix random seeds for reproducibility
 SEED = 123
@@ -17,14 +20,43 @@ np.random.seed(SEED)
 
 def main(config):
     logger = config.get_logger('train')
-
+    
     # setup data_loader instances
-    data_loader = config.init_obj('data_loader', module_data)
+    data_loader = config.init_obj('data_loader', module_data, training=True)
     valid_data_loader = data_loader.split_validation()
+
+    vocab_size = data_loader.tokenizer.vocab_size
+    model = config.init_obj('arch', module_arch, vocab_size=vocab_size, sos_token = 101) # For now I use the CLS token as the SOS token
+    logger.info(model)
+
+    # prepare for (multi-device) GPU training
+    device, device_ids = prepare_device(config['n_gpu'])
+    
+    model = model.to(device)
+    if len(device_ids) > 1:
+        model = torch.nn.DataParallel(model, device_ids=device_ids)
+    
+    criterion = getattr(module_loss, config['loss'])
+    
+
+    metrics = [getattr(module_metric, met) for met in config['metrics']]
+    # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
+    trainable_params = filter(lambda p: p.requires_grad, model.parameters())
+    optimizer = config.init_obj('optimizer', torch.optim, trainable_params)
+    lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
+
+    trainer = Trainer(model, criterion, metrics, optimizer,
+                      config=config,
+                      device=device,
+                      data_loader=data_loader,
+                      valid_data_loader=valid_data_loader,
+                      lr_scheduler=lr_scheduler)
+
+    trainer.train()
 
 
 if __name__ == '__main__':
-    args = argparse.ArgumentParser(description='PyTorch Template')
+    args = argparse.ArgumentParser(description='Creativity Model')
     args.add_argument('-c', '--config', default=None, type=str,
                       help='config file path (default: None)')
     args.add_argument('-r', '--resume', default=None, type=str,

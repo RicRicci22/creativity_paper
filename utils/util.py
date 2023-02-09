@@ -73,5 +73,5 @@ class UAVCollator(object):
     def __call__(self, batch):
         images, questions = zip(*batch)
         images = torch.stack(images)
-        questions = self.tokenizer(questions, padding=True, return_tensors="pt")
+        questions = self.tokenizer(questions, padding=True, return_tensors="pt")["input_ids"]
         return images, questions
