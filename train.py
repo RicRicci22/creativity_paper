@@ -1,23 +1,42 @@
-from models.creativity_model import CreativityModel, CreativityEncoder
-from data_loader.data_loaders import UAVDataLoader
-from transformers import BertTokenizer
-from utils import UAVCollator
+import argparse
+import collections
+from parse_config import ConfigParser
+
+
+import models.creativity_model as module_arch
+import data_loader.data_loaders as module_data
 import torch
+import numpy as np 
 
-if __name__=="__main__":
-    # # Test the dataloader
-    # tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-    # collator = UAVCollator(tokenizer=tokenizer)
-    # data_loader = UAVDataLoader(image_dir="dataset/images", questions_path="dataset/UAV_summaries_and_questions_formatted.pkl", test_imgs="dataset/filenames_test.txt", collate_fn = collator, batch_size=8)
-    # for i, (images, questions) in enumerate(data_loader):
-    #     print(images.shape)
-    #     print(questions['input_ids'].shape)
-    #     break
+# fix random seeds for reproducibility
+SEED = 123
+torch.manual_seed(SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+np.random.seed(SEED)
 
-    # Test the creativity encoder
-    model = CreativityModel(backbone_name="resnet18", hidden_size=512, latent_size=20, vocab_size=30522, sos_token=10)
-    dummy_batch = torch.randn((8, 3, 224, 224))
-    dummy_questions = torch.randint(0, 30522, (8, 20))
-    # Forward pass of the model
-    out = model(dummy_batch, dummy_questions)
-    print(out.shape)
+def main(config):
+    logger = config.get_logger('train')
+
+    # setup data_loader instances
+    data_loader = config.init_obj('data_loader', module_data)
+    valid_data_loader = data_loader.split_validation()
+
+
+if __name__ == '__main__':
+    args = argparse.ArgumentParser(description='PyTorch Template')
+    args.add_argument('-c', '--config', default=None, type=str,
+                      help='config file path (default: None)')
+    args.add_argument('-r', '--resume', default=None, type=str,
+                      help='path to latest checkpoint (default: None)')
+    args.add_argument('-d', '--device', default=None, type=str,
+                      help='indices of GPUs to enable (default: all)')
+
+    # custom cli options to modify configuration from default values given in json file.
+    CustomArgs = collections.namedtuple('CustomArgs', 'flags type target')
+    options = [
+        CustomArgs(['--lr', '--learning_rate'], type=float, target='optimizer;args;lr'),
+        CustomArgs(['--bs', '--batch_size'], type=int, target='data_loader;args;batch_size')
+    ]
+    config = ConfigParser.from_args(args, options)
+    main(config)
