@@ -5,13 +5,14 @@ from base.base_model import BaseModel
 from torchvision.models import resnet18, ResNet18_Weights
 
 class CreativityModel(BaseModel):
-    def __init__(self, backbone_name, hidden_size, latent_size, vocab_size, sos_token):
+    def __init__(self, backbone_name, hidden_size, latent_size, vocab_size, sos_token, eos_token):
         super().__init__()
         self.backbone_name = backbone_name
         self.backbone = BackBone(backbone_name)
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
         self.backbone_feats = self.backbone.out_features
+        self.eos_token = eos_token
 
         self.encoder = CreativityEncoder(backbone_feats=self.backbone_feats, hidden_size=self.hidden_size, vocab_size=self.vocab_size)
         self.vae = VaE(hidden_size=hidden_size, latent_size=latent_size)
@@ -137,7 +138,7 @@ class CreativityDecoder(nn.Module):
         img_feats = self.feat_to_hidden(img_feats)
         embdedded_questions = self.embedding(questions)
         # Concatenate <SOS> token to the questions
-        start_embedding = self.embedding(torch.tensor(self.sos_token,dtype=torch.long).expand((embdedded_questions.shape[0],1)))
+        start_embedding = self.embedding(torch.tensor(self.sos_token,dtype=torch.long).expand((embdedded_questions.shape[0],1)).to(embdedded_questions.device))
         embdedded_questions = torch.cat((start_embedding, embdedded_questions), dim=1)
         # Concatenate image features, latents, and token embeddings
         x = torch.cat((img_feats.unsqueeze(1), latent_codes.unsqueeze(1), embdedded_questions), dim=1)

@@ -26,7 +26,7 @@ def main(config):
     valid_data_loader = data_loader.split_validation()
 
     vocab_size = data_loader.tokenizer.vocab_size
-    model = config.init_obj('arch', module_arch, vocab_size=vocab_size, sos_token = 101) # For now I use the CLS token as the SOS token
+    model = config.init_obj('arch', module_arch, vocab_size=vocab_size, sos_token = 101, eos_token=102) # For now I use the CLS token as the SOS token and the SEP as the EOS token
     logger.info(model)
 
     # prepare for (multi-device) GPU training

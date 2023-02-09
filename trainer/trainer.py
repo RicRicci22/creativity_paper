@@ -43,7 +43,11 @@ class Trainer(BaseTrainer):
 
             data, target = data.to(self.device), target.to(self.device)
             self.optimizer.zero_grad()
-            output = self.model(data)
+            output = self.model(data, target)
+            eos_index = torch.tensor(self.model.eos_token,dtype=torch.long).expand((target.shape[0],1)).to(target.device)
+            target = torch.cat((target,eos_index), dim=1)[:,1:]
+            output = output[:,:-1,:].contiguous().view(-1, output.shape[-1])
+            target = target.contiguous().view(-1)
             loss = self.criterion(output, target)
             loss.backward()
             self.optimizer.step()
