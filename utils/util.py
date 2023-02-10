@@ -4,6 +4,7 @@ import pandas as pd
 from pathlib import Path
 from itertools import repeat
 from collections import OrderedDict
+from torch.nn.utils.rnn import pad_sequence
 
 
 def ensure_dir(dirname):
@@ -73,9 +74,11 @@ class UAVCollator(object):
     def __call__(self, batch):
         images, questions = zip(*batch)
         images = torch.stack(images)
-        questions = self.tokenizer(questions, padding=True, return_tensors="pt")["input_ids"]
+        list_tokenized_questions = [torch.tensor(self.tokenizer.encode(question).ids,dtype=torch.long) for question in questions]
+        questions = pad_sequence(list_tokenized_questions, batch_first=True, padding_value=0)
         lengths = [sum(questions[i,:]!=0).item() for i in range(questions.shape[0])]
         index_sorted = sorted(range(len(lengths)), key=lambda k: lengths[k], reverse=True)
         lenghts = [lengths[i] for i in index_sorted]
         questions = questions[index_sorted]
+
         return images, questions, lenghts

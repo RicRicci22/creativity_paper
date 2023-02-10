@@ -9,7 +9,7 @@ class CreativityModel(BaseModel):
     def __init__(self, backbone_name, hidden_size, latent_size, vocab_size, sos_token, eos_token, device):
         super().__init__()
         self.backbone_name = backbone_name
-        self.backbone = BackBone(backbone_name)
+        self.backbone = BackBone(backbone_name, freeze=True)
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
         self.backbone_feats = self.backbone.out_features

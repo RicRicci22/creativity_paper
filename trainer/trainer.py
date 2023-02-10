@@ -49,7 +49,8 @@ class Trainer(BaseTrainer):
             loss = rec_loss + reg_loss
             loss.backward()
             self.optimizer.step()
-            print(self.data_loader.tokenizer.batch_decode(self.model.sample(data)))
+            for question in self.data_loader.tokenizer.batch_decode(self.model.sample(data)):
+                print(question)
 
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
             self.train_metrics.update('loss', loss.item())

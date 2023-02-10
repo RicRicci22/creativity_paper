@@ -29,9 +29,9 @@ def main(config):
     device, device_ids = prepare_device(config['n_gpu'])
 
 
-    vocab_size = data_loader.tokenizer.vocab_size
+    vocab_size = data_loader.vocab_size
     model = config.init_obj('arch', module_arch, vocab_size=vocab_size, sos_token = 101, eos_token=102, device = device) # For now I use the CLS token as the SOS token and the SEP as the EOS token
-    #logger.info(model)
+    logger.info(model)
     
     model = model.to(device)
     if len(device_ids) > 1:
@@ -43,6 +43,7 @@ def main(config):
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
     optimizer = config.init_obj('optimizer', torch.optim, trainable_params)
+    
     lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
 
     trainer = Trainer(model, criterion, metrics, optimizer,
