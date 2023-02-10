@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import torch
 from base.base_model import BaseModel
 from torchvision.models import resnet18, ResNet18_Weights
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 class CreativityModel(BaseModel):
     def __init__(self, backbone_name, hidden_size, latent_size, vocab_size, sos_token, eos_token, device):
@@ -22,17 +23,17 @@ class CreativityModel(BaseModel):
 
         self.hiddens_to_logits = nn.Linear(self.hidden_size, self.vocab_size, bias=False)
     
-    def forward(self, images, questions, mode="train"):
+    def forward(self, images, questions, lenghts, mode="train"):
         # Embed the questions
         img_feats = self.backbone(images)
         # Encode the images and questions
-        hiddens = self.encoder(img_feats, questions)
+        hiddens = self.encoder(img_feats, questions, lenghts)
         # Project to VaE latent space
         latents, mus, logvars = self.vae(hiddens, mode=mode)
-
-        decoder_hiddens = self.decoder(img_feats, latents, questions)
+        # Forward all to the decoder
+        decoder_hiddens = self.decoder(img_feats, latents, questions, lenghts)
         # Get logits from decoder hiddens
-        logits = self.hiddens_to_logits(decoder_hiddens)
+        logits = self.hiddens_to_logits(decoder_hiddens[0])
 
         return logits, mus, logvars
     
@@ -82,22 +83,25 @@ class CreativityEncoder(nn.Module):
         self.backbone_feats = backbone_feats
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
-        print(vocab_size)
         self.device = device
         # Modules
         self.embedding = nn.Embedding(self.vocab_size, self.hidden_size, padding_idx=0)
         self.feat_to_hidden = nn.Linear(self.backbone_feats, self.hidden_size, bias=False)
         self.rnn = nn.GRU(hidden_size,hidden_size, batch_first=True)
 
-    def forward(self, img_feats, questions):
+    def forward(self, img_feats, questions, lengths=None):
         img_feats = self.feat_to_hidden(img_feats)
         embdedded_questions = self.embedding(questions)
         # Concatenate image features and token embeddings
-        x = torch.cat((img_feats.unsqueeze(1), embdedded_questions), dim=1)
+        x = torch.cat((img_feats.unsqueeze(1), embdedded_questions[:,1:,:]), dim=1)
+        if(lengths is not None):
+            x = pack_padded_sequence(x, [l-1 for l in lengths], batch_first=True)
         # Feed to GRU
         x, _ = self.rnn(x)
+        if(lengths is not None):
+            x, l = pad_packed_sequence(x, batch_first=True)
 
-        return x[:,-1,:]
+        return x[range(img_feats.shape[0]),list(l-1),:] # l is a lenght, so to convert to the index I need to substract 1
     
 class BackBone(nn.Module):
     def __init__(self, backbone, freeze=True):
@@ -181,15 +185,20 @@ class CreativityDecoder(nn.Module):
         self.rnn = nn.GRU(hidden_size,hidden_size, batch_first=True)
         self.device = device
     
-    def forward(self, img_feats, latent_codes, questions):
+    def forward(self, img_feats, latent_codes, questions, lenghts):
+        # Project image features to hidden space
         img_feats = self.feat_to_hidden(img_feats)
+        # Questions contains both the start and the end tokens
         embdedded_questions = self.embedding(questions)
-        # Concatenate <SOS> token to the questions
-        start_embedding = self.embedding(torch.tensor(self.sos_token,dtype=torch.long).expand((embdedded_questions.shape[0],1)).to(self.device))
-        embdedded_questions = torch.cat((start_embedding, embdedded_questions), dim=1)
         # Concatenate image features, latents, and token embeddings
         x = torch.cat((img_feats.unsqueeze(1), latent_codes.unsqueeze(1), embdedded_questions), dim=1)
+        # Pack the sequence
+        x = pack_padded_sequence(x, [l+1 for l in lenghts], batch_first=True)
         # Feed to GRU
         x, _ = self.rnn(x)
-        return x[:,2:,:]
+        x, _ = pad_packed_sequence(x, batch_first=True)
+        x = x[:,2:,:] # Remove the first two tokens (img feats and latent token)
+        # Pack again to be more efficient
+        x = pack_padded_sequence(x, [l-1 for l in lenghts], batch_first=True)
+        return x
         

@@ -74,4 +74,8 @@ class UAVCollator(object):
         images, questions = zip(*batch)
         images = torch.stack(images)
         questions = self.tokenizer(questions, padding=True, return_tensors="pt")["input_ids"]
-        return images, questions
+        lengths = [sum(questions[i,:]!=0).item() for i in range(questions.shape[0])]
+        index_sorted = sorted(range(len(lengths)), key=lambda k: lengths[k], reverse=True)
+        lenghts = [lengths[i] for i in index_sorted]
+        questions = questions[index_sorted]
+        return images, questions, lenghts
