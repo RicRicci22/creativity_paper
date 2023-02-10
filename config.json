@@ -30,7 +30,7 @@
             "amsgrad": true
         }
     },
-    "loss": "cross_entropy_loss",
+    "loss": "tot_loss",
     "metrics": [
         "accuracy", "top_k_acc"
     ],

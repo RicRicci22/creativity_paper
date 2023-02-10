@@ -43,12 +43,12 @@ class Trainer(BaseTrainer):
 
             data, target = data.to(self.device), target.to(self.device)
             self.optimizer.zero_grad()
-            output = self.model(data, target)
+            output, mean, logvar = self.model(data, target)
             eos_index = torch.tensor(self.model.eos_token,dtype=torch.long).expand((target.shape[0],1)).to(target.device)
             target = torch.cat((target,eos_index), dim=1)[:,1:]
             output = output[:,:-1,:].contiguous().view(-1, output.shape[-1])
             target = target.contiguous().view(-1)
-            loss = self.criterion(output, target)
+            loss = self.criterion(output, target, mean, logvar)
             loss.backward()
             self.optimizer.step()
 
@@ -89,8 +89,12 @@ class Trainer(BaseTrainer):
             for batch_idx, (data, target) in enumerate(self.valid_data_loader):
                 data, target = data.to(self.device), target.to(self.device)
 
-                output = self.model(data)
-                loss = self.criterion(output, target)
+                output, mean, logvar = self.model(data, target)
+                eos_index = torch.tensor(self.model.eos_token,dtype=torch.long).expand((target.shape[0],1)).to(target.device)
+                target = torch.cat((target,eos_index), dim=1)[:,1:]
+                output = output[:,:-1,:].contiguous().view(-1, output.shape[-1])
+                target = target.contiguous().view(-1)
+                loss = self.criterion(output, target, mean, logvar)
 
                 self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
                 self.valid_metrics.update('loss', loss.item())

@@ -32,7 +32,7 @@ class CreativityModel(BaseModel):
         # Get logits from decoder hiddens
         logits = self.hiddens_to_logits(decoder_hiddens)
 
-        return logits
+        return logits, mus, logvars
         
     
 
