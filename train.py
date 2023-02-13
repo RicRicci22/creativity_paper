@@ -22,7 +22,7 @@ def main(config):
     logger = config.get_logger('train')
     
     # setup data_loader instances
-    data_loader = config.init_obj('data_loader', module_data, training=True, overfitting=True)
+    data_loader = config.init_obj('data_loader', module_data, training=True, overfitting=False)
     valid_data_loader = data_loader.split_validation()
 
     # prepare for (multi-device) GPU training

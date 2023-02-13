@@ -15,7 +15,7 @@
             "image_dir": "dataset/images",
             "questions_path": "dataset/UAV_summaries_and_questions_formatted.pkl",
             "test_imgs": "dataset/filenames_test.txt",
-            "batch_size": 16,
+            "batch_size": 2,
             "shuffle": true,
             "validation_split": 0.1,
             "num_workers": 1
