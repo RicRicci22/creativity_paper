@@ -22,7 +22,7 @@ class UAVDataLoader(BaseDataLoader):
     """
     MNIST data loading demo using BaseDataLoader
     """
-    def __init__(self, image_dir, questions_path, test_imgs, batch_size, shuffle=True, validation_split=0.0, num_workers=1, training=True):
+    def __init__(self, image_dir, questions_path, test_imgs, batch_size, shuffle=True, validation_split=0.0, num_workers=1, training=True, overfitting=False):
         trsfm = transforms.Compose([
             transforms.Normalize((0.1307,), (0.3081,))
         ])
@@ -43,7 +43,7 @@ class UAVDataLoader(BaseDataLoader):
         self.tokenizer = tokenizer
         self.vocab_size = tokenizer.get_vocab_size()
         self.collate_fn = UAVCollator(self.tokenizer)
-        self.dataset = UAVDataset(image_dir, questions_path, test_imgs, transform=trsfm, training=training)
+        self.dataset = UAVDataset(image_dir, questions_path, test_imgs, transform=trsfm, training=training, overfitting=overfitting)
 
         super().__init__(self.dataset, batch_size, shuffle, validation_split, num_workers, collate_fn=self.collate_fn)
     
