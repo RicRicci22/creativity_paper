@@ -90,8 +90,6 @@ class Im2QDecoder(nn.Module):
         packed_output = pack_padded_sequence(padded_output, [l-1 for l in lenghts], batch_first=True)
         return packed_output
 
-
-
 class CreativityModel(BaseModel):
     def __init__(self, backbone_name, hidden_size, latent_size, vocab_size, sos_token, eos_token, only_image = False, device = "cpu"):
         super().__init__()
