@@ -22,7 +22,7 @@ class UAVDataLoader(BaseDataLoader):
     """
     MNIST data loading demo using BaseDataLoader
     """
-    def __init__(self, image_dir, questions_path, test_imgs, batch_size, shuffle=False, validation_split=0.0, num_workers=1, training=True):
+    def __init__(self, image_dir, questions_path, test_imgs, batch_size, shuffle=True, validation_split=0.0, num_workers=1, training=True):
         trsfm = transforms.Compose([
             transforms.Normalize((0.1307,), (0.3081,))
         ])
