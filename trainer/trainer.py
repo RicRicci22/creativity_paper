@@ -43,17 +43,22 @@ class Trainer(BaseTrainer):
         for batch_idx, (data, target, lenghts) in enumerate(self.data_loader):
             data, target = data.to(self.device), target.to(self.device)
             self.optimizer.zero_grad()
-            output, mean, logvar = self.model(data, target, lenghts)
+            #output, mean, logvar = self.model(data, target, lenghts)
+            output = self.model(data, target, lenghts)
             target = pack_padded_sequence(target[:,1:], [l-1 for l in lenghts], batch_first=True)[0]
-            rec_loss, reg_loss = self.criterion(output, target, mean, logvar)
-            loss = rec_loss + reg_loss
+            #rec_loss, reg_loss = self.criterion(output, target, mean, logvar)
+            rec_loss, _ = self.criterion(output, target)
+
+            # Examples ####################################################
+            sampled_questions = self.model.sample(data)
+            for i, question in enumerate(sampled_questions):
+                print("Sampled question: ",str(i))
+                print(self.data_loader.tokenizer.decode(question.tolist()))
+            ###############################################################
+
+            loss = rec_loss #+ reg_loss
             loss.backward()
             self.optimizer.step()
-
-            # Examples
-            sampled_questions = self.model.sample(data)
-            for question in sampled_questions:
-                print(self.data_loader.tokenizer.decode(question.tolist()))
 
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
             self.train_metrics.update('loss', loss.item())
@@ -91,10 +96,12 @@ class Trainer(BaseTrainer):
         with torch.no_grad():
             for batch_idx, (data, target, lenghts) in enumerate(self.valid_data_loader):
                 data, target = data.to(self.device), target.to(self.device)
-                output, mean, logvar = self.model(data, target, lenghts)
+                #output, mean, logvar = self.model(data, target, lenghts)
+                output = self.model(data, target, lenghts)
                 target = pack_padded_sequence(target[:,1:], [l-1 for l in lenghts], batch_first=True)[0]
-                rec_loss, reg_loss = self.criterion(output, target, mean, logvar)
-                loss = rec_loss + reg_loss
+                #rec_loss, reg_loss = self.criterion(output, target, mean, logvar)
+                rec_loss, _ = self.criterion(output, target)
+                loss = rec_loss #+ reg_loss
                 self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
                 self.valid_metrics.update('loss', loss.item())
                 for met in self.metric_ftns:

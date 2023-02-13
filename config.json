@@ -3,11 +3,10 @@
     "n_gpu": 1,
 
     "arch": {
-        "type": "CreativityModel",
+        "type": "Im2QModel",
         "args":{
             "backbone_name":"resnet18",
-            "hidden_size":128, 
-            "latent_size":20
+            "hidden_size":128
         }
     },
     "data_loader": {
@@ -16,7 +15,7 @@
             "image_dir": "dataset/images",
             "questions_path": "dataset/UAV_summaries_and_questions_formatted.pkl",
             "test_imgs": "dataset/filenames_test.txt",
-            "batch_size": 32,
+            "batch_size": 16,
             "shuffle": true,
             "validation_split": 0.1,
             "num_workers": 1
