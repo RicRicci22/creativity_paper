@@ -53,7 +53,7 @@ class Trainer(BaseTrainer):
             # Examples
             sampled_questions = self.model.sample(data)
             for question in sampled_questions:
-                print(self.data_loader.tokenizer.decode(question))
+                print(self.data_loader.tokenizer.decode(question.tolist()))
 
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
             self.train_metrics.update('loss', loss.item())

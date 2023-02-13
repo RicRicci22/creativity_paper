@@ -54,12 +54,12 @@ class CreativityModel(BaseModel):
             output = torch.empty((images.shape[0], 0), device=self.device)
             for _ in range(max_len):
                 hiddens, states = self.decoder.rnn(x, states)
-                logits = hiddens[0] @ self.hiddens_to_logits_w + self.hiddens_to_logits_b
+                logits = hiddens @ self.hiddens_to_logits_w + self.hiddens_to_logits_b
                 # Get the most likely token
-                predicted = torch.argmax(logits[-1, :], dim=1)
-                output = torch.cat((output, predicted.unsqueeze(1)), dim=1)
+                predicted = torch.argmax(logits[:,-1,:], dim=1, keepdim=True)
+                output = torch.cat((output, predicted), dim=1)
                 # Get the embedding of the predicted token
-                x = self.decoder.embedding(predicted).unsqueeze(1)
+                x = self.decoder.embedding(predicted)
                 # If the predicted token is the eos token, stop decoding
                 args = list(set(args)-set(torch.where(predicted==self.eos_token)[0].tolist()))
                 if len(args) == 0:
@@ -109,6 +109,7 @@ class BackBone(nn.Module):
             self.transforms = ResNet18_Weights.DEFAULT.transforms()
             self.out_features = self.backbone.fc.in_features
             self.backbone = nn.Sequential(*list(self.backbone.children())[:-1])
+            self.bn1 = nn.BatchNorm1d(self.out_features)
             self.to_hidden = nn.Linear(self.out_features, hidden_size, bias=False)
         else:
             raise NotImplementedError
@@ -120,7 +121,8 @@ class BackBone(nn.Module):
     def forward(self, x):
         x = self.transforms(x)
         x = self.backbone(x)
-        return self.to_hidden(x.squeeze())
+        x = self.bn1(x.squeeze())
+        return self.to_hidden(x)
 
 
 class VaE(nn.Module):
@@ -134,10 +136,10 @@ class VaE(nn.Module):
         self.hidden_size = hidden_size
         self.latent_size = latent_size
         # Modules
-        self.hidden_to_mean = nn.Linear(self.hidden_size, self.latent_size)
-        self.hidden_to_logvar = nn.Linear(self.hidden_size, self.latent_size)
+        self.hidden_to_mean = nn.Linear(self.hidden_size, self.latent_size, bias=False)
+        self.hidden_to_logvar = nn.Linear(self.hidden_size, self.latent_size, bias=False)
         
-        self.latent_to_hidden = nn.Linear(self.latent_size, self.hidden_size)
+        self.latent_to_hidden = nn.Linear(self.latent_size, self.hidden_size, bias=False)
         self.device = device
 
     def forward(self, x, mode="train"):
