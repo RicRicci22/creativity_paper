@@ -7,6 +7,15 @@ from tokenizers.models import BPE
 from tokenizers.pre_tokenizers import Whitespace
 from tokenizers.trainers import BpeTrainer
 
+from tokenizers import (
+    decoders,
+    models,
+    normalizers,
+    pre_tokenizers,
+    processors,
+    trainers,
+    Tokenizer,
+)
 
 
 class UAVDataLoader(BaseDataLoader):
@@ -18,10 +27,17 @@ class UAVDataLoader(BaseDataLoader):
             transforms.Normalize((0.1307,), (0.3081,))
         ])
         print('Building tokenizer..')
-        tokenizer = Tokenizer(BPE())
-        tokenizer.pre_tokenizer = Whitespace()
+        tokenizer = Tokenizer(BPE(unk_token="[UNK]"))
+        tokenizer.normalizer = normalizers.BertNormalizer(lowercase=True) # Picked just to test
+        tokenizer.pre_tokenizer = pre_tokenizers.BertPreTokenizer()
         trainer = BpeTrainer(special_tokens=["[PAD]", "[UNK]", "[SOS]", "[EOS]"])
         tokenizer.train(files=["dataset/questions.txt"], trainer=trainer)
+        sos_token_id = tokenizer.token_to_id("[SOS]")
+        eos_token_id = tokenizer.token_to_id("[EOS]")
+        tokenizer.post_processor = processors.TemplateProcessing(
+        single=f"[SOS] $A [EOS]",
+        special_tokens=[("[SOS]", sos_token_id), ("[EOS]", eos_token_id)],
+        )
         print("Done! Tokenizer built!")
 
         self.tokenizer = tokenizer

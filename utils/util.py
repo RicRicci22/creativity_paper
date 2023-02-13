@@ -74,7 +74,8 @@ class UAVCollator(object):
     def __call__(self, batch):
         images, questions = zip(*batch)
         images = torch.stack(images)
-        list_tokenized_questions = [torch.tensor(self.tokenizer.encode(question).ids,dtype=torch.long) for question in questions]
+        # Might add encode batch
+        list_tokenized_questions = [torch.tensor(self.tokenizer.encode(question, add_special_tokens = True).ids,dtype=torch.long) for question in questions]
         questions = pad_sequence(list_tokenized_questions, batch_first=True, padding_value=0)
         lengths = [sum(questions[i,:]!=0).item() for i in range(questions.shape[0])]
         index_sorted = sorted(range(len(lengths)), key=lambda k: lengths[k], reverse=True)

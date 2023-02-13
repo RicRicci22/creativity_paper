@@ -9,19 +9,19 @@ class CreativityModel(BaseModel):
     def __init__(self, backbone_name, hidden_size, latent_size, vocab_size, sos_token, eos_token, device):
         super().__init__()
         self.backbone_name = backbone_name
-        self.backbone = BackBone(backbone_name, freeze=True)
+        self.backbone = BackBone(backbone_name, hidden_size, freeze=True)
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
-        self.backbone_feats = self.backbone.out_features
         self.sos_token = sos_token
         self.eos_token = eos_token
         self.device = device
 
-        self.encoder = CreativityEncoder(backbone_feats=self.backbone_feats, hidden_size=self.hidden_size, vocab_size=self.vocab_size, device=device)
+        self.encoder = CreativityEncoder(hidden_size=self.hidden_size, vocab_size=self.vocab_size, device=device)
         self.vae = VaE(hidden_size=hidden_size, latent_size=latent_size, device=device)
-        self.decoder = CreativityDecoder(backbone_feats=self.backbone_feats, hidden_size=hidden_size, vocab_size=vocab_size, sos_token=sos_token, device=device)
+        self.decoder = CreativityDecoder(hidden_size=hidden_size, vocab_size=vocab_size, sos_token=sos_token, device=device)
 
-        self.hiddens_to_logits = nn.Linear(self.hidden_size, self.vocab_size, bias=False)
+        self.hiddens_to_logits_w = nn.Parameter(torch.randn(self.hidden_size, self.vocab_size, device=self.device) * 0.001) # Initialize at a low number 
+        self.hiddens_to_logits_b = nn.Parameter(torch.randn(self.vocab_size, device=self.device) * 0) # Initialize at zero
     
     def forward(self, images, questions, lenghts, mode="train"):
         # Embed the questions
@@ -33,8 +33,9 @@ class CreativityModel(BaseModel):
         # Forward all to the decoder
         decoder_hiddens = self.decoder(img_feats, latents, questions, lenghts)
         # Get logits from decoder hiddens
-        logits = self.hiddens_to_logits(decoder_hiddens[0])
-
+        #decoder_hiddens = self.bn1(decoder_hiddens[0])
+        #decoder_hiddens = decoder_hiddens[0]
+        logits = decoder_hiddens[0] @ self.hiddens_to_logits_w + self.hiddens_to_logits_b
         return logits, mus, logvars
     
     def sample(self, images, max_len=50):
@@ -53,9 +54,9 @@ class CreativityModel(BaseModel):
             output = torch.empty((images.shape[0], 0), device=self.device)
             for _ in range(max_len):
                 hiddens, states = self.decoder.rnn(x, states)
-                logits = self.hiddens_to_logits(hiddens)
+                logits = hiddens[0] @ self.hiddens_to_logits_w + self.hiddens_to_logits_b
                 # Get the most likely token
-                predicted = torch.argmax(logits[:, -1, :], dim=1)
+                predicted = torch.argmax(logits[-1, :], dim=1)
                 output = torch.cat((output, predicted.unsqueeze(1)), dim=1)
                 # Get the embedding of the predicted token
                 x = self.decoder.embedding(predicted).unsqueeze(1)
@@ -65,7 +66,7 @@ class CreativityModel(BaseModel):
                     break
 
         self.train()
-        return output
+        return torch.tensor(output,dtype=torch.long, device=self.device)
         
     
 
@@ -78,19 +79,16 @@ class CreativityEncoder(nn.Module):
     It feeds all this to a GRU and returns the last hidden state of the GRU.
     '''
 
-    def __init__(self, backbone_feats, hidden_size, vocab_size, device):
+    def __init__(self, hidden_size, vocab_size, device):
         super().__init__()
-        self.backbone_feats = backbone_feats
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
         self.device = device
         # Modules
         self.embedding = nn.Embedding(self.vocab_size, self.hidden_size, padding_idx=0)
-        self.feat_to_hidden = nn.Linear(self.backbone_feats, self.hidden_size, bias=False)
         self.rnn = nn.GRU(hidden_size,hidden_size, batch_first=True)
 
     def forward(self, img_feats, questions, lengths=None):
-        img_feats = self.feat_to_hidden(img_feats)
         embdedded_questions = self.embedding(questions)
         # Concatenate image features and token embeddings
         x = torch.cat((img_feats.unsqueeze(1), embdedded_questions[:,1:,:]), dim=1)
@@ -104,13 +102,14 @@ class CreativityEncoder(nn.Module):
         return x[range(img_feats.shape[0]),list(l-1),:] # l is a lenght, so to convert to the index I need to substract 1
     
 class BackBone(nn.Module):
-    def __init__(self, backbone, freeze=True):
+    def __init__(self, backbone, hidden_size, freeze=True):
         super().__init__()
         if(backbone=="resnet18"):
             self.backbone = resnet18(weights=ResNet18_Weights.DEFAULT)
             self.transforms = ResNet18_Weights.DEFAULT.transforms()
             self.out_features = self.backbone.fc.in_features
             self.backbone = nn.Sequential(*list(self.backbone.children())[:-1])
+            self.to_hidden = nn.Linear(self.out_features, hidden_size, bias=False)
         else:
             raise NotImplementedError
         
@@ -120,7 +119,8 @@ class BackBone(nn.Module):
 
     def forward(self, x):
         x = self.transforms(x)
-        return self.backbone(x).squeeze()
+        x = self.backbone(x)
+        return self.to_hidden(x.squeeze())
 
 
 class VaE(nn.Module):
@@ -173,21 +173,17 @@ class CreativityDecoder(nn.Module):
     It feeds all this to a GRU and returns the last hidden state of the GRU.
     '''
 
-    def __init__(self, backbone_feats, hidden_size, vocab_size, sos_token, device):
+    def __init__(self, hidden_size, vocab_size, sos_token, device):
         super().__init__()
-        self.backbone_feats = backbone_feats
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
         self.sos_token = sos_token
         # Modules
         self.embedding = nn.Embedding(self.vocab_size, self.hidden_size, padding_idx=0)
-        self.feat_to_hidden = nn.Linear(self.backbone_feats, self.hidden_size, bias=False)
         self.rnn = nn.GRU(hidden_size,hidden_size, batch_first=True)
         self.device = device
     
     def forward(self, img_feats, latent_codes, questions, lenghts):
-        # Project image features to hidden space
-        img_feats = self.feat_to_hidden(img_feats)
         # Questions contains both the start and the end tokens
         embdedded_questions = self.embedding(questions)
         # Concatenate image features, latents, and token embeddings
