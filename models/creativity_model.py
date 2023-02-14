@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import torch
 from base.base_model import BaseModel
 from torchvision.models import resnet18, ResNet18_Weights
+from torchvision import transforms
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 
@@ -216,7 +217,9 @@ class BackBone(nn.Module):
         super().__init__()
         if(backbone=="resnet18"):
             self.backbone = resnet18(weights=ResNet18_Weights.DEFAULT)
-            self.transforms = ResNet18_Weights.DEFAULT.transforms()
+            self.transforms = torch.nn.Sequential(
+                            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+                        )
             self.out_features = self.backbone.fc.in_features
             self.backbone = nn.Sequential(*list(self.backbone.children())[:-1])
             self.to_hidden = nn.Linear(self.out_features, hidden_size, bias=False)

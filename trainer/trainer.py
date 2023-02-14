@@ -69,14 +69,6 @@ class Trainer(BaseTrainer):
                 break
         log = self.train_metrics.result()
 
-        # Examples ####################################################
-        print("Examples from training:")
-        sampled_questions = self.model.sample(data)
-        for i, question in enumerate(sampled_questions):
-            print("Sampled question: ",str(i))
-            print(self.data_loader.tokenizer.decode(question.tolist()))
-        ###############################################################
-
         if self.do_validation:
             val_log = self._valid_epoch(epoch)
             log.update(**{'val_'+k : v for k, v in val_log.items()})
@@ -110,11 +102,17 @@ class Trainer(BaseTrainer):
                 self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
             
             # Examples ####################################################
-            print("Examples from validation:")
+            self.logger.info("Examples from validation:")
             sampled_questions = self.model.sample(data)
             for i, question in enumerate(sampled_questions):
-                print("Sampled question: ",str(i))
-                print(self.data_loader.tokenizer.decode(question.tolist()))
+                # Convert to list 
+                question = question.tolist()
+                eos_position = question.index(3)
+                if(eos_position != -1):
+                    question = question[:eos_position]
+                    self.logger.info(self.data_loader.tokenizer.decode(question))
+                else:
+                    self.logger.info(self.data_loader.tokenizer.decode(question))
             ###############################################################
 
         # add histogram of model parameters to the tensorboard
