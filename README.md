@@ -1,7 +1,8 @@
 # Pytorch implementation of the paper "Creativity: Generating Diverse Questions using Variational Autoencoders" https://arxiv.org/abs/1704.03493
 
-I will try to build and train a model that replicates the results of the paper, by attaining to what specified in the paper first\
-and then explore some variants to improve the performance. 
+I will try to build and train a model that replicates the results of the paper, by attaining to what specified in the paper first and then explore some variants to improve the performance. 
+
+Compatible with pytorch 1.12.1 
 
 I will train the algorithm on the same dataset mentioned in the paper
 
