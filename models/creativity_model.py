@@ -10,7 +10,7 @@ class Im2QModel(BaseModel):
     '''
     Basic model which extracts features from the images, and produces for each image a single question
     '''
-    def __init__(self, backbone_name, hidden_size, vocab_size, sos_token, eos_token, device = 'cpu'):
+    def __init__(self, backbone_name, hidden_size, vocab_size, sos_token, eos_token, concatenate = True, device = 'cpu'):
         super().__init__()
         self.backbone_name = backbone_name
         self.backbone = BackBone(backbone_name, hidden_size, freeze=True)
@@ -19,10 +19,11 @@ class Im2QModel(BaseModel):
         self.sos_token = sos_token
         self.eos_token  = eos_token
         self.device = device
-        self.decoder = Im2QDecoder(hidden_size, vocab_size, sos_token, device)
+        self.decoder = Im2QDecoder(hidden_size, vocab_size, sos_token, device = device, concatenate = concatenate)
+        self.concatenate = concatenate
         self.hiddens_to_logits_w = nn.Parameter(torch.randn(self.hidden_size, self.vocab_size, device=self.device) * 0.001) # Initialize at a low number 
         self.hiddens_to_logits_b = nn.Parameter(torch.randn(self.vocab_size, device=self.device) * 0) # Initialize at zero
-    
+            
     def forward(self, images, questions, lenghts):
         # Embed the questions
         img_feats = self.backbone(images)
@@ -38,7 +39,11 @@ class Im2QModel(BaseModel):
             img_feats = self.backbone(images)
             # Concatenate image features and sos token
             sos_token = self.decoder.embedding(torch.tensor([self.sos_token],dtype = torch.long, device=self.device).expand(img_feats.shape[0], 1))
-            x = torch.cat((img_feats.unsqueeze(1), sos_token), dim=1)
+            if(self.concatenate):
+                x = torch.cat((img_feats.unsqueeze(1), sos_token), dim=1)
+            else: 
+                x = torch.cat((img_feats.unsqueeze(1), sos_token), dim=2)
+                
             # Start decoding by feeding the GRU
             states = None
             args = range(images.shape[0])
@@ -52,7 +57,10 @@ class Im2QModel(BaseModel):
                 predicted = torch.multinomial(probs, num_samples=1)
                 output = torch.cat((output, predicted), dim=1)
                 # Get the embedding of the predicted token
-                x = self.decoder.embedding(predicted)
+                if(self.concatenate):
+                    x = self.decoder.embedding(predicted)
+                else:
+                    x = torch.cat((img_feats.unsqueeze(1), self.decoder.embedding(predicted)), dim=2)
                 # If the predicted token is the eos token, stop decoding
                 args = list(set(args)-set(torch.where(predicted==self.eos_token)[0].tolist()))
                 if len(args) == 0:
@@ -65,29 +73,39 @@ class Im2QDecoder(nn.Module):
     '''
     Simple decoder which takes image features and produce a question for each image. 
     '''
-    def __init__(self,hidden_size, vocab_size, sos_token, device):
+    def __init__(self,hidden_size, vocab_size, sos_token, concatenate = True, device = "cpu"):
         super().__init__()
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
         self.sos_token = sos_token
         self.device = device
         self.embedding = nn.Embedding(vocab_size, hidden_size, padding_idx=0)
-        self.rnn = nn.GRU(hidden_size, hidden_size, batch_first=True)
+        if(concatenate):
+            self.rnn = nn.GRU(hidden_size, hidden_size, batch_first=True)
+        else:
+            self.rnn = nn.GRU(hidden_size*2, hidden_size, batch_first=True)
+        self.concatenate = concatenate
     
     def forward(self, img_features, questions, lenghts):
         # Embed the questions
         embedded = self.embedding(questions)
-        # Concatenate the image features and the embedded questions
-        input = torch.cat((img_features.unsqueeze(1), embedded), dim=1)
-        # Pack the padded sequence
-        packed = pack_padded_sequence(input, lenghts, batch_first=True)
+        if(self.concatenate):
+            # Concatenate the image features and the embedded questions
+            input = torch.cat((img_features.unsqueeze(1), embedded), dim=1)
+            # Pack the padded sequence
+            packed = pack_padded_sequence(input, lenghts, batch_first=True)
+        else:
+            input = torch.cat((img_features.unsqueeze(1).expand(-1,embedded.shape[1],-1), embedded), dim=2)
+            packed = pack_padded_sequence(input, [l-1 for l in lenghts], batch_first=True)
         # Feed the packed sequence to the RNN
         packed_output, _ = self.rnn(packed)
-        # Pad the packed sequence
-        padded_output, _ = pad_packed_sequence(packed_output, batch_first=True)
-        padded_output = padded_output[:,1:,:] # Remove the first token which is the image feature
-        # Pack again to be more efficient
-        packed_output = pack_padded_sequence(padded_output, [l-1 for l in lenghts], batch_first=True)
+        if(self.concatenate):
+            # Pad the packed sequence
+            padded_output, _ = pad_packed_sequence(packed_output, batch_first=True)
+            padded_output = padded_output[:,1:,:] # Remove the first token which is the image feature
+            # Pack again to be more efficient
+            packed_output = pack_padded_sequence(padded_output, [l-1 for l in lenghts], batch_first=True)
+            
         return packed_output
 
 class CreativityModel(BaseModel):

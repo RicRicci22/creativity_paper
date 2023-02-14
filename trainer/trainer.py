@@ -49,13 +49,6 @@ class Trainer(BaseTrainer):
             #rec_loss, reg_loss = self.criterion(output, target, mean, logvar)
             rec_loss, _ = self.criterion(output, target)
 
-            # Examples ####################################################
-            sampled_questions = self.model.sample(data)
-            for i, question in enumerate(sampled_questions):
-                print("Sampled question: ",str(i))
-                print(self.data_loader.tokenizer.decode(question.tolist()))
-            ###############################################################
-
             loss = rec_loss #+ reg_loss
             loss.backward()
             self.optimizer.step()
@@ -75,6 +68,14 @@ class Trainer(BaseTrainer):
             if batch_idx == self.len_epoch:
                 break
         log = self.train_metrics.result()
+
+        # Examples ####################################################
+        print("Examples from training:")
+        sampled_questions = self.model.sample(data)
+        for i, question in enumerate(sampled_questions):
+            print("Sampled question: ",str(i))
+            print(self.data_loader.tokenizer.decode(question.tolist()))
+        ###############################################################
 
         if self.do_validation:
             val_log = self._valid_epoch(epoch)
@@ -107,6 +108,14 @@ class Trainer(BaseTrainer):
                 for met in self.metric_ftns:
                     self.valid_metrics.update(met.__name__, met(output, target))
                 self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
+            
+            # Examples ####################################################
+            print("Examples from validation:")
+            sampled_questions = self.model.sample(data)
+            for i, question in enumerate(sampled_questions):
+                print("Sampled question: ",str(i))
+                print(self.data_loader.tokenizer.decode(question.tolist()))
+            ###############################################################
 
         # add histogram of model parameters to the tensorboard
         for name, p in self.model.named_parameters():
