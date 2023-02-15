@@ -36,13 +36,14 @@ class Im2QModel(BaseModel):
     def sample(self, images, max_len=50):
         self.eval()
         with torch.no_grad():
-            # Sample from prior and decode a question for the image
+            # Extract image features
             img_feats = self.backbone(images)
-            # Concatenate image features and sos token
             sos_token = self.decoder.embedding(torch.tensor([self.sos_token],dtype = torch.long, device=self.device).expand(img_feats.shape[0], 1))
             if(self.concatenate):
+                # Concatenate image features and sos token in the 1 dimension
                 x = torch.cat((img_feats.unsqueeze(1), sos_token), dim=1)
             else: 
+                # Concatenate image features and sos token in the 2 dimension
                 x = torch.cat((img_feats.unsqueeze(1), sos_token), dim=2)
                 
             # Start decoding by feeding the GRU
@@ -69,6 +70,50 @@ class Im2QModel(BaseModel):
 
         self.train()
         return output.clone().detach().requires_grad_(False)
+    
+    def beam_search(self, images, max_len = 50, k = 1):
+        '''
+        Beam search for the model, generates k of the most probable questions for every input image. 
+        In general it expects that images have a batch dimension (it can be also a single image)
+        # Arguments:
+        images: Tensor of shape (batch_size, channels, height, width)
+        max_len: Maximum length of the generated questions
+        k: Number of the most probable questions to generate for each image
+        '''
+        self.eval()
+        with torch.no_grad():
+            # Extract image features
+            img_feats = self.backbone(images) # (batch_size, hidden_size)
+            sos_token = self.decoder.embedding(torch.tensor([self.sos_token],dtype = torch.long, device=self.device).expand(img_feats.shape[0], 1))
+            if(self.concatenate):
+                # Concatenate image features and sos token in the 1 dimension
+                x = torch.cat((img_feats.unsqueeze(1), sos_token), dim=1)
+            else: 
+                # Concatenate image features and sos token in the 2 dimension
+                x = torch.cat((img_feats.unsqueeze(1), sos_token), dim=2)
+            
+            # Start decoding by feeding the GRU
+            states = None
+            # Initialize at zero the tensor containing the cumulative probabilities of the generated sequences
+            cumul_probs = torch.zeros((images.shape[0], k*k), device=self.device) # (batch_size, k*k)
+            output = torch.empty((images.shape[0], k), device=self.device, dtype=torch.long) # (batch_size, k*k)
+            for i in range(max_len):
+                hiddens, states = self.decoder.rnn(x, states) 
+                if (i==0):
+                    # Hiddens (batch_size, 1, hidden_size)
+                    logits = hiddens @ self.hiddens_to_logits_w + self.hiddens_to_logits_b # (batch_size, 1, vocab_size)
+                    logits = logits[:,-1,:]
+                    probs = F.softmax(logits, dim=1)
+                    predicted = torch.multinomial(probs, num_samples=k) # (batch_size, k)
+                    #cumul_probs[]= 
+                    output = torch.cat((output, predicted), dim=1)
+                    # Get the embedding of the predicted token
+                    if(self.concatenate):
+                        x = self.decoder.embedding(predicted) # (batch_size, k, hidden_size)
+                    else:
+                        x = torch.cat((img_feats.unsqueeze(1), self.decoder.embedding(predicted)), dim=2)
+            
+        
 
 class Im2QDecoder(nn.Module):
     '''
@@ -143,8 +188,6 @@ class CreativityModel(BaseModel):
         # Forward all to the decoder
         decoder_hiddens = self.decoder(img_feats, latents, questions, lenghts)
         # Get logits from decoder hiddens
-        #decoder_hiddens = self.bn1(decoder_hiddens[0])
-        #decoder_hiddens = decoder_hiddens[0]
         logits = decoder_hiddens[0] @ self.hiddens_to_logits_w + self.hiddens_to_logits_b
         return logits, mus, logvars
     
@@ -169,7 +212,10 @@ class CreativityModel(BaseModel):
                 hiddens, states = self.decoder.rnn(x, states)
                 logits = hiddens @ self.hiddens_to_logits_w + self.hiddens_to_logits_b
                 # Get the most likely token
-                predicted = torch.argmax(logits[:,-1,:], dim=1, keepdim=True)
+                logits = logits[:,-1,:]
+                probs = F.softmax(logits, dim=1)
+                predicted = torch.multinomial(probs, num_samples=1)
+                # Add the predicted token to the output
                 output = torch.cat((output, predicted), dim=1)
                 # Get the embedding of the predicted token
                 x = self.decoder.embedding(predicted)
@@ -269,11 +315,9 @@ class VaE(nn.Module):
         x = self.latent_to_hidden(z)
         return x, mean, logvar
     
-    def sample_prior(self, mean, var, batch_size=1):
+    def sample_prior(self, batch_size=1):
         # Sample from prior
         z = torch.randn(batch_size, self.latent_size).to(self.device)
-        # Reparameterize
-        z = z.mul(torch.exp(0.5*var)).add_(mean)
         # Project back to hidden space
         x = self.latent_to_hidden(z)
         return x

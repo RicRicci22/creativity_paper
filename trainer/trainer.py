@@ -43,8 +43,8 @@ class Trainer(BaseTrainer):
         for batch_idx, (data, target, lenghts) in enumerate(self.data_loader):
             data, target = data.to(self.device), target.to(self.device)
             self.optimizer.zero_grad()
-            #output, mean, logvar = self.model(data, target, lenghts)
-            output = self.model(data, target, lenghts)
+            output, mean, logvar = self.model(data, target, lenghts)
+            #output = self.model(data, target, lenghts)
             target = pack_padded_sequence(target[:,1:], [l-1 for l in lenghts], batch_first=True)[0]
             #rec_loss, reg_loss = self.criterion(output, target, mean, logvar)
             rec_loss, _ = self.criterion(output, target)
@@ -89,8 +89,8 @@ class Trainer(BaseTrainer):
         with torch.no_grad():
             for batch_idx, (data, target, lenghts) in enumerate(self.valid_data_loader):
                 data, target = data.to(self.device), target.to(self.device)
-                #output, mean, logvar = self.model(data, target, lenghts)
-                output = self.model(data, target, lenghts)
+                output, mean, logvar = self.model(data, target, lenghts)
+                #output = self.model(data, target, lenghts)
                 target = pack_padded_sequence(target[:,1:], [l-1 for l in lenghts], batch_first=True)[0]
                 #rec_loss, reg_loss = self.criterion(output, target, mean, logvar)
                 rec_loss, _ = self.criterion(output, target)
@@ -107,11 +107,11 @@ class Trainer(BaseTrainer):
             for i, question in enumerate(sampled_questions):
                 # Convert to list 
                 question = question.tolist()
-                eos_position = question.index(3)
-                if(eos_position != -1):
+                try:
+                    eos_position = question.index(3)
                     question = question[:eos_position]
                     self.logger.info(self.data_loader.tokenizer.decode(question))
-                else:
+                except:
                     self.logger.info(self.data_loader.tokenizer.decode(question))
             ###############################################################
 

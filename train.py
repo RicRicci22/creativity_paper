@@ -31,7 +31,7 @@ def main(config):
 
     vocab_size = data_loader.vocab_size
     #print(vocab_size)
-    model = config.init_obj('arch', module_arch, vocab_size=vocab_size, sos_token = 2, eos_token=3, device = device, concatenate=True) 
+    model = config.init_obj('arch', module_arch, vocab_size=vocab_size, sos_token = 2, eos_token=3, device = device) 
     logger.info(model)
     
     model = model.to(device)
