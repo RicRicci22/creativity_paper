@@ -113,8 +113,6 @@ class Im2QModel(BaseModel):
                     else:
                         x = torch.cat((img_feats.unsqueeze(1), self.decoder.embedding(predicted)), dim=2)
             
-        
-
 class Im2QDecoder(nn.Module):
     '''
     Simple decoder which takes image features and produce a question for each image. 
@@ -279,7 +277,7 @@ class BackBone(nn.Module):
     def forward(self, x):
         x = self.transforms(x)
         x = self.backbone(x)
-        return self.to_hidden(x.squeeze())
+        return self.to_hidden(x.squeeze(2).squeeze(2))
 
 class VaE(nn.Module):
     '''

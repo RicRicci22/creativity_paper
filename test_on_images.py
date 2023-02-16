@@ -7,7 +7,10 @@ import models.metric as module_metric
 import models.creativity_model as module_arch
 from parse_config import ConfigParser
 from torch.nn.utils.rnn import pack_padded_sequence
-
+import os
+from torchvision.io import read_image, ImageReadMode
+import streamlit as st
+from torchvision.transforms import ToPILImage
 
 def main(config):
     logger = config.get_logger('test')
@@ -28,11 +31,8 @@ def main(config):
     vocab_size = data_loader.vocab_size
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = config.init_obj('arch', module_arch, vocab_size=vocab_size, sos_token = 2, eos_token=3, device = device)
-    logger.info(model)
 
-    # get function handles of loss and metrics
-    loss_fn = getattr(module_loss, config['loss'])
-    metric_fns = [getattr(module_metric, met) for met in config['metrics']]
+    model = model.to(device)
 
     logger.info('Loading checkpoint: {} ...'.format(config.resume))
     checkpoint = torch.load(config.resume)
@@ -40,55 +40,27 @@ def main(config):
     if config['n_gpu'] > 1:
         model = torch.nn.DataParallel(model)
     model.load_state_dict(state_dict)
-
-    # prepare model for testing
-    model = model.to(device)
+    
+    # Prepare model for testing
     model.eval()
-
-    total_loss = 0.0
-    total_metrics = torch.zeros(len(metric_fns))
-
+    topil = ToPILImage()
     with torch.no_grad():
-        for i, (data, target, lenghts) in enumerate(tqdm(data_loader)):
-            data, target = data.to(device), target.to(device)
-            if(config["arch"]["type"]=="Im2QModel"):
-                output = model(data, target, lenghts)
-            else:
-                output, mean, logvar = model(data, target, lenghts)
-                
-            target = pack_padded_sequence(target[:,1:], [l-1 for l in lenghts], batch_first=True)[0]
-
-            #
-            # save sample images, or do something with output here
-            # Examples ####################################################
-            print("Examples from training:")
-            sampled_questions = model.sample(data)
-            for i, question in enumerate(sampled_questions):
+        for image in data_loader.dataset.image_names:
+            image_path = os.path.join(data_loader.dataset.image_dir, image)
+            image = read_image(image_path, mode=ImageReadMode.RGB)/255.0
+            st.image(topil(image))
+            image = image.unsqueeze(0) # to simulate batch size
+            image = image.to(device)
+            question = model.sample(image)
+            for i, question in enumerate(question):
                 # Convert to list 
                 question = question.tolist()
                 eos_position = question.index(3)
-                print("Sampled question: ",str(i))
                 if(eos_position != -1):
                     question = question[:eos_position]
-                    print(data_loader.tokenizer.decode(question))
+                    st.text(data_loader.tokenizer.decode(question))
                 else:
-                    print(data_loader.tokenizer.decode(question))
-            ###############################################################
-            #
-
-            # computing loss, metrics on test set
-            rec_loss, _ = loss_fn(output, target)
-            batch_size = data.shape[0]
-            total_loss += rec_loss.item() * batch_size
-            for i, metric in enumerate(metric_fns):
-                total_metrics[i] += metric(output, target) * batch_size
-
-    n_samples = len(data_loader.sampler)
-    log = {'loss': total_loss / n_samples}
-    log.update({
-        met.__name__: total_metrics[i].item() / n_samples for i, met in enumerate(metric_fns)
-    })
-    logger.info(log)
+                    st.text(data_loader.tokenizer.decode(question))
 
 
 if __name__ == '__main__':
