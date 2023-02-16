@@ -87,32 +87,42 @@ class Im2QModel(BaseModel):
             sos_token = self.decoder.embedding(torch.tensor([self.sos_token],dtype = torch.long, device=self.device).expand(img_feats.shape[0], 1))
             if(self.concatenate):
                 # Concatenate image features and sos token in the 1 dimension
-                x = torch.cat((img_feats.unsqueeze(1), sos_token), dim=1)
+                x = torch.cat((img_feats.repeat_interleave(k**2,dim=0).unsqueeze(1), sos_token.repeat_interleave(k**2,dim=0)), dim=1)
             else: 
                 # Concatenate image features and sos token in the 2 dimension
-                x = torch.cat((img_feats.unsqueeze(1), sos_token), dim=2)
+                x = torch.cat((img_feats.repeat_interleave(k**2,dim=0).unsqueeze(1), sos_token.repeat_interleave(k**2,dim=0)), dim=2)
             
             # Start decoding by feeding the GRU
             states = None
             # Initialize at zero the tensor containing the cumulative probabilities of the generated sequences
-            cumul_probs = torch.zeros((images.shape[0], k*k), device=self.device) # (batch_size, k*k)
-            output = torch.empty((images.shape[0], k), device=self.device, dtype=torch.long) # (batch_size, k*k)
+            cumul_probs = torch.zeros((images.shape[0]*(k**2), 1), device=self.device) # (batch_size, k*k)
+            # Initialize the tensor to contain the output to give back 
+            output = torch.empty((images.shape[0], k, 0), device=self.device, dtype=torch.long) # (batch_size, k)
             for i in range(max_len):
                 hiddens, states = self.decoder.rnn(x, states) 
-                if (i==0):
-                    # Hiddens (batch_size, 1, hidden_size)
-                    logits = hiddens @ self.hiddens_to_logits_w + self.hiddens_to_logits_b # (batch_size, 1, vocab_size)
-                    logits = logits[:,-1,:]
-                    probs = F.softmax(logits, dim=1)
-                    predicted = torch.multinomial(probs, num_samples=k) # (batch_size, k)
-                    cumul_probs += torch.repeat_interleave(probs, k, dim=1) # (batch_size, k*k)
-                    output = torch.cat((output, predicted), dim=1)
-                    # Get the embedding of the predicted token
+                # Hiddens (batch_size, 1, hidden_size)
+                logits = hiddens @ self.hiddens_to_logits_w + self.hiddens_to_logits_b # (batch_size, 1, vocab_size)
+                logits = logits[:,-1,:]
+                probs = F.softmax(logits, dim=1)
+                predicted = torch.multinomial(probs, num_samples=1) # (batch_size, k)
+                cumul_probs += probs.gather(1,predicted) # (batch_size, k*k)
+                # Reorder the cumul probs to select the k most probable sequences
+                cumul_temp = cumul_probs.view(images.shape[0],-1) # (batch_size, k, k)
+                # Sort the cumul_temp along the last dimension 
+                cumul_temp = cumul_temp.sort(dim=1, descending=True)[1] # (batch_size, k, k)
+                predicted = predicted.view(images.shape[0],-1).gather(1,cumul_temp[:,:k]) # (batch_size, k*k)
+                states = states.view(1,images.shape[0],-1,states.shape[2])
+                output = torch.cat((output, predicted.unsqueeze(2)), dim=2)
+                
+                predicted = predicted.reshape((-1,1)).repeat_interleave(k,dim=0)
+                # Get the embedding of the predicted token
+                if(i==0):
                     if(self.concatenate):
-                        x = self.decoder.embedding(predicted) # (batch_size, k, hidden_size)
+                        x = self.decoder.embedding(predicted.view(-1,1)) # (batch_size, k, hidden_size)
                     else:
-                        x = torch.cat((img_feats.unsqueeze(1), self.decoder.embedding(predicted)), dim=2)
-            
+                        x = torch.cat((img_feats.unsqueeze(1).repeat(k,1,1), self.decoder.embedding(predicted.view(-1,1))), dim=2)
+                    states = states.repeat(1,k,1)
+                
 class Im2QDecoder(nn.Module):
     '''
     Simple decoder which takes image features and produce a question for each image. 

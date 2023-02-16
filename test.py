@@ -62,7 +62,7 @@ def main(config):
             # save sample images, or do something with output here
             # Examples ####################################################
             print("Examples from training:")
-            sampled_questions = model.sample(data)
+            sampled_questions = model.beam_search(data, max_len = 50, k=2)
             for i, question in enumerate(sampled_questions):
                 # Convert to list 
                 question = question.tolist()
