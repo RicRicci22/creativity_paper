@@ -3,12 +3,11 @@
     "n_gpu": 1,
 
     "arch": {
-        "type": "CreativityModel",
+        "type": "Im2QModel",
         "args":{
             "backbone_name":"resnet18",
             "hidden_size":512,
-            "latent_size":20,
-            "only_image": false
+            "concatenate": false
         }
     },
     "data_loader": {
@@ -20,7 +19,7 @@
             "batch_size": 16,
             "shuffle": true,
             "validation_split": 0.1,
-            "num_workers": 1
+            "num_workers": 4
         }
     },
     "optimizer": {

@@ -15,6 +15,7 @@ from utils import prepare_device
 # fix random seeds for reproducibility
 SEED = 123
 torch.manual_seed(SEED)
+torch.cuda.manual_seed_all(SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(SEED)

@@ -43,7 +43,10 @@ class Trainer(BaseTrainer):
         for batch_idx, (data, target, lenghts) in enumerate(self.data_loader):
             data, target = data.to(self.device), target.to(self.device)
             self.optimizer.zero_grad()
-            output, mean, logvar = self.model(data, target, lenghts)
+            if(self.config["arch"]["type"]=="Im2QModel"):
+                output = self.model(data, target, lenghts)
+            else:
+                output, mean, logvar = self.model(data, target, lenghts)
             #output = self.model(data, target, lenghts)
             target = pack_padded_sequence(target[:,1:], [l-1 for l in lenghts], batch_first=True)[0]
             #rec_loss, reg_loss = self.criterion(output, target, mean, logvar)
@@ -89,7 +92,10 @@ class Trainer(BaseTrainer):
         with torch.no_grad():
             for batch_idx, (data, target, lenghts) in enumerate(self.valid_data_loader):
                 data, target = data.to(self.device), target.to(self.device)
-                output, mean, logvar = self.model(data, target, lenghts)
+                if(self.config["arch"]["type"]=="Im2QModel"):
+                    output = self.model(data, target, lenghts)
+                else:
+                    output, mean, logvar = self.model(data, target, lenghts)
                 #output = self.model(data, target, lenghts)
                 target = pack_padded_sequence(target[:,1:], [l-1 for l in lenghts], batch_first=True)[0]
                 #rec_loss, reg_loss = self.criterion(output, target, mean, logvar)
