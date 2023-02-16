@@ -5,6 +5,8 @@ from pathlib import Path
 from itertools import repeat
 from collections import OrderedDict
 from torch.nn.utils.rnn import pad_sequence
+import numpy as np 
+import random
 
 
 def ensure_dir(dirname):
@@ -83,3 +85,9 @@ class UAVCollator(object):
         questions = questions[index_sorted]
 
         return images, questions, lenghts
+    
+
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)

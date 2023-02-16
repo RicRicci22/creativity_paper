@@ -2,12 +2,13 @@ import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 from torch.utils.data.sampler import SubsetRandomSampler
+from utils import seed_worker
 
 class BaseDataLoader(DataLoader):
     """
     Base class for all data loaders
     """
-    def __init__(self, dataset, batch_size, shuffle, validation_split, num_workers, collate_fn=default_collate):
+    def __init__(self, dataset, batch_size, shuffle, validation_split, num_workers, collate_fn=default_collate, generator=None):
         self.validation_split = validation_split
         self.shuffle = shuffle
 
@@ -15,6 +16,7 @@ class BaseDataLoader(DataLoader):
         self.n_samples = len(dataset)
 
         self.sampler, self.valid_sampler = self._split_sampler(self.validation_split)
+        #self.generator = generator
 
         self.init_kwargs = {
             'dataset': dataset,
@@ -23,7 +25,7 @@ class BaseDataLoader(DataLoader):
             'collate_fn': collate_fn,
             'num_workers': num_workers
         }
-        super().__init__(sampler=self.sampler, **self.init_kwargs)
+        super().__init__(sampler=self.sampler, **self.init_kwargs, generator=generator, worker_init_fn=seed_worker)
 
     def _split_sampler(self, split):
         if split == 0.0:
@@ -44,8 +46,8 @@ class BaseDataLoader(DataLoader):
         valid_idx = idx_full[0:len_valid]
         train_idx = np.delete(idx_full, np.arange(0, len_valid))
 
-        train_sampler = SubsetRandomSampler(train_idx)
-        valid_sampler = SubsetRandomSampler(valid_idx)
+        train_sampler = SubsetRandomSampler(train_idx, generator=self.generator)
+        valid_sampler = SubsetRandomSampler(valid_idx, generator=self.generator)
 
         # turn off shuffle option which is mutually exclusive with sampler
         self.shuffle = False

@@ -105,7 +105,7 @@ class Im2QModel(BaseModel):
                     logits = logits[:,-1,:]
                     probs = F.softmax(logits, dim=1)
                     predicted = torch.multinomial(probs, num_samples=k) # (batch_size, k)
-                    #cumul_probs[]= 
+                    cumul_probs += torch.repeat_interleave(probs, k, dim=1) # (batch_size, k*k)
                     output = torch.cat((output, predicted), dim=1)
                     # Get the embedding of the predicted token
                     if(self.concatenate):
@@ -213,7 +213,7 @@ class CreativityModel(BaseModel):
                 logits = hiddens @ self.hiddens_to_logits_w + self.hiddens_to_logits_b
                 # Get the most likely token
                 logits = logits[:,-1,:]
-                probs = F.softmax(logits, dim=1)
+                probs = F.softmax(logits , dim=1)
                 predicted = torch.multinomial(probs, num_samples=1)
                 # Add the predicted token to the output
                 output = torch.cat((output, predicted), dim=1)

@@ -1,6 +1,7 @@
 import argparse
 import collections
 from parse_config import ConfigParser
+import random
 
 import models.creativity_model as module_arch
 import data_loader.data_loaders as module_data
@@ -17,12 +18,15 @@ torch.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(SEED)
+random.seed(SEED)
+g = torch.Generator()
+g.manual_seed(SEED)
 
 def main(config):
     logger = config.get_logger('train')
     
     # setup data_loader instances
-    data_loader = config.init_obj('data_loader', module_data, training=True, overfitting=False)
+    data_loader = config.init_obj('data_loader', module_data, training=True, overfitting=False, generator=g)
     valid_data_loader = data_loader.split_validation()
 
     # prepare for (multi-device) GPU training

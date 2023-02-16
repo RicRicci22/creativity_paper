@@ -2,7 +2,7 @@
 
 I will try to build and train a model that replicates the results of the paper, by attaining to what specified in the paper first and then explore some variants to improve the performance. 
 
-Compatible with pytorch 1.12.1 
+Compatible with pytorch 1.13.1 and python 3.10.9 
 
 I will train the algorithm on the same dataset mentioned in the paper
 
