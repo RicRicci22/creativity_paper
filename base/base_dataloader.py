@@ -4,11 +4,22 @@ from torch.utils.data.dataloader import default_collate
 from torch.utils.data.sampler import SubsetRandomSampler
 from utils import seed_worker
 
+
 class BaseDataLoader(DataLoader):
     """
     Base class for all data loaders
     """
-    def __init__(self, dataset, batch_size, shuffle, validation_split, num_workers, collate_fn=default_collate, generator=None):
+
+    def __init__(
+        self,
+        dataset,
+        batch_size,
+        shuffle,
+        validation_split,
+        num_workers,
+        collate_fn=default_collate,
+        generator=None,
+    ):
         self.validation_split = validation_split
         self.shuffle = shuffle
 
@@ -16,16 +27,21 @@ class BaseDataLoader(DataLoader):
         self.n_samples = len(dataset)
 
         self.sampler, self.valid_sampler = self._split_sampler(self.validation_split)
-        #self.generator = generator
+        # self.generator = generator
 
         self.init_kwargs = {
-            'dataset': dataset,
-            'batch_size': batch_size,
-            'shuffle': self.shuffle,
-            'collate_fn': collate_fn,
-            'num_workers': num_workers
+            "dataset": dataset,
+            "batch_size": batch_size,
+            "shuffle": self.shuffle,
+            "collate_fn": collate_fn,
+            "num_workers": num_workers,
         }
-        super().__init__(sampler=self.sampler, **self.init_kwargs, generator=generator, worker_init_fn=seed_worker)
+        super().__init__(
+            sampler=self.sampler,
+            **self.init_kwargs,
+            generator=generator,
+            worker_init_fn=seed_worker
+        )
 
     def _split_sampler(self, split):
         if split == 0.0:
@@ -38,7 +54,9 @@ class BaseDataLoader(DataLoader):
 
         if isinstance(split, int):
             assert split > 0
-            assert split < self.n_samples, "validation set size is configured to be larger than entire dataset."
+            assert (
+                split < self.n_samples
+            ), "validation set size is configured to be larger than entire dataset."
             len_valid = split
         else:
             len_valid = int(self.n_samples * split)

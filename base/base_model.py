@@ -6,6 +6,7 @@ class BaseModel(nn.Module):
     """
     Base class for all models
     """
+
     @abstractmethod
     def forward(self, *inputs):
         """
@@ -19,5 +20,12 @@ class BaseModel(nn.Module):
         Model prints with number of trainable and non-trainable parameters
         """
         tot_parameters = sum([p.numel() for p in self.parameters()])
-        trainable_params = sum([p.numel() for p in self.parameters() if p.requires_grad])
-        return super().__str__() + '\nTotal parameters {} \nTrainable parameters: {}'.format(tot_parameters, trainable_params)
+        trainable_params = sum(
+            [p.numel() for p in self.parameters() if p.requires_grad]
+        )
+        return (
+            super().__str__()
+            + "\nTotal parameters {} \nTrainable parameters: {}".format(
+                tot_parameters, trainable_params
+            )
+        )

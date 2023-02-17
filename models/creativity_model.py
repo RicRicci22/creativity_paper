@@ -365,7 +365,8 @@ class CreativityDecoder(nn.Module):
         
 class OnlyImageEncoder(nn.Module):
     '''
-    Encoder implemented as in https://ieeexplore.ieee.org/document/9671493. It basically consist of a backbone which takes a batch of images and returns a batch of image features.
+    Encoder implemented as in https://ieeexplore.ieee.org/document/9671493. 
+    It basically consist of a backbone which takes a batch of images and returns a batch of image features.
     It optionally append on top of it a linear layer that projects the image features to a hidden space of size hidden_size.
     '''
     def __init__(self, backbone_name, hidden_size, freeze=True):
