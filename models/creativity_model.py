@@ -88,7 +88,9 @@ class Im2QModel(BaseModel):
                 (images.shape[0], 0), device=self.device, dtype=torch.long
             )
             for _ in range(max_len):
+                x = self.decoder.embed_ln(x)
                 hiddens, states = self.decoder.rnn(x, states)
+                hiddens = self.decoder.post_ln(hiddens)
                 logits = hiddens @ self.hiddens_to_logits_w + self.hiddens_to_logits_b
                 # Get the most likely token
                 logits = logits[:, -1, :]
@@ -302,18 +304,18 @@ class Im2QDecoder(nn.Module):
         if self.concatenate:
             # Concatenate the image features and the embedded questions
             input = torch.cat((img_features.unsqueeze(1), embedded), dim=1)
-            input = self.embed_ln(input)
             # Pack the padded sequence
             packed = pack_padded_sequence(input, lenghts, batch_first=True)
+            packed[0] = self.embed_ln(packed[0])
         else:
             input = torch.cat(
                 (img_features.unsqueeze(1).expand(-1, embedded.shape[1], -1), embedded),
                 dim=2,
             )
-            input = self.embed_ln(input)
             packed = pack_padded_sequence(
                 input, [l - 1 for l in lenghts], batch_first=True
             )
+            packed[0] = self.embed_ln(packed[0])
         # Feed the packed sequence to the RNN
         packed_output, _ = self.rnn(packed)
         if self.concatenate:
