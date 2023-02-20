@@ -59,7 +59,12 @@ def main(config):
             st.image(topil(image))
             image = image.unsqueeze(0)  # to simulate batch size
             image = image.to(device)
-            question = model.sample(image)
+            question = model.sample(image, max_len=50, multinomial=False)
+            # question = model.beam_decode(image, max_len=50, beam_width=3, topk=1)
+            # for b in question:
+            #     for topk in b:
+            #         st.text(topk[0])
+            #         st.text(data_loader.tokenizer.decode(topk[1]))
             for i, question in enumerate(question):
                 # Convert to list
                 question = question.tolist()

@@ -6,8 +6,9 @@
         "type": "Im2QModel",
         "args":{
             "backbone_name":"resnet18",
-            "hidden_size":512,
-            "concatenate": false
+            "hidden_size":128,
+            "concatenate": false,
+            "dropout": 0.2
         }
     },
     "data_loader": {

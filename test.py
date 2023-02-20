@@ -32,7 +32,7 @@ def main(config):
         module_arch,
         vocab_size=vocab_size,
         sos_token=2,
-        eos_token=3,
+        eos_token=8,
         device=device,
     )
     logger.info(model)
@@ -71,17 +71,25 @@ def main(config):
             # save sample images, or do something with output here
             # Examples ####################################################
             print("Examples from training:")
-            sampled_questions = model.beam_search(data, max_len=50, k=2)
+            sampled_questions = model.beam_decode(
+                data, max_len=50, beam_width=3, topk=20
+            )
+
             for i, question in enumerate(sampled_questions):
                 # Convert to list
-                question = question.tolist()
-                eos_position = question.index(3)
-                print("Sampled question: ", str(i))
-                if eos_position != -1:
-                    question = question[:eos_position]
-                    print(data_loader.tokenizer.decode(question))
-                else:
-                    print(data_loader.tokenizer.decode(question))
+                for q in question:
+                    print(q[0])
+                    print(data_loader.tokenizer.decode(q[1]))
+                break
+            exit()
+            # question = question.tolist()
+            # eos_position = question.index(3)
+            # print("Sampled question: ", str(i))
+            # if eos_position != -1:
+            #     question = question[:eos_position]
+            #     print(data_loader.tokenizer.decode(question))
+            # else:
+            #     print(data_loader.tokenizer.decode(question))
             ###############################################################
             #
 

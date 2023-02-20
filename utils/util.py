@@ -111,3 +111,25 @@ def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
     np.random.seed(worker_seed)
     random.seed(worker_seed)
+
+
+class BeamSearchNode(object):
+    def __init__(self, input, hiddenstate, previousNode, wordId, cumul_prob, length):
+        """
+        :param hiddenstate:
+        :param previousNode:
+        :param wordId:
+        :param logProb:
+        :param length:
+        """
+        self.input = input
+        self.h = hiddenstate
+        self.prevNode = previousNode
+        self.wordid = wordId
+        self.cumul_prob = cumul_prob
+        self.len = length
+
+    def eval(self, alpha=1.0):
+        reward = 0
+        # Add here a function for shaping a reward
+        return 1 - self.cumul_prob + alpha * reward
