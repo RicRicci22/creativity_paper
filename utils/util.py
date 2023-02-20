@@ -133,3 +133,24 @@ class BeamSearchNode(object):
         reward = 0
         # Add here a function for shaping a reward
         return 1 - self.cumul_prob + alpha * reward
+
+
+class custom_ln(torch.nn.Module):
+    """
+    Custom implementation of layer norm that takes into consideration the padding tokens, without using them to calculate the mean over the sequence.
+    It is to be considered for NLP tasks, it normalizes along the embedding dimension for batches of sequences.
+    Inputs:
+    d_model: dimensionality of the input embeddings (int)
+    """
+
+    def __init__(self, d_model, pad_id=0, eps=1e-6):
+        super(custom_ln, self).__init__()
+        self.a_2 = torch.nn.Parameter(torch.ones(d_model))
+        self.b_2 = torch.nn.Parameter(torch.zeros(d_model))
+        self.eps = eps
+        self.pad_id = pad_id
+
+    def forward(self, x):
+        x = x - torch.mean(x, dim=-1, keepdim=True)
+        x = x / torch.sqrt(torch.var(x, dim=-1, keepdim=True) + self.eps)
+        return self.a_2 * x + self.b_2

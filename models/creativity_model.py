@@ -156,6 +156,8 @@ class Im2QModel(BaseModel):
                     dim=2,
                 )
 
+            decoder_input = self.decoder.embed_ln(decoder_input)
+
             # Number of sentence to generate
             endnodes = []
 
@@ -189,11 +191,13 @@ class Im2QModel(BaseModel):
                 decoder_input = n.input
                 decoder_hidden = n.h
 
+                decoder_input = self.decoder.embed_ln(decoder_input)
+
                 # decode for one step using decoder
                 decoder_output, decoder_hidden = self.decoder.rnn(
                     decoder_input, decoder_hidden
                 )
-
+                decoder_output = self.decoder.post_ln(decoder_output)
                 # PUT HERE REAL BEAM SEARCH OF TOP
                 # Hiddens (batch_size, 1, hidden_size)
                 logits = (
@@ -304,18 +308,18 @@ class Im2QDecoder(nn.Module):
         if self.concatenate:
             # Concatenate the image features and the embedded questions
             input = torch.cat((img_features.unsqueeze(1), embedded), dim=1)
+            input = self.embed_ln(input)
             # Pack the padded sequence
             packed = pack_padded_sequence(input, lenghts, batch_first=True)
-            packed[0] = self.embed_ln(packed[0])
         else:
             input = torch.cat(
                 (img_features.unsqueeze(1).expand(-1, embedded.shape[1], -1), embedded),
                 dim=2,
             )
+            input = self.embed_ln(input)
             packed = pack_padded_sequence(
                 input, [l - 1 for l in lenghts], batch_first=True
             )
-            packed[0] = self.embed_ln(packed[0])
         # Feed the packed sequence to the RNN
         packed_output, _ = self.rnn(packed)
         if self.concatenate:
@@ -346,6 +350,7 @@ class CreativityModel(BaseModel):
         eos_token,
         only_image=False,
         device="cpu",
+        dropout=0.2,
     ):
         super().__init__()
         self.backbone_name = backbone_name
@@ -356,11 +361,14 @@ class CreativityModel(BaseModel):
         self.eos_token = eos_token
         self.device = device
         self.only_image = only_image
+        self.dropout = nn.Dropout(dropout)
 
-        if not only_image:
-            self.encoder = CreativityEncoder(
-                hidden_size=self.hidden_size, vocab_size=self.vocab_size, device=device
-            )
+        self.encoder = CreativityEncoder(
+            hidden_size=self.hidden_size,
+            vocab_size=self.vocab_size,
+            device=device,
+            only_image=only_image,
+        )
 
         self.vae = VaE(hidden_size=hidden_size, latent_size=latent_size, device=device)
         self.decoder = CreativityDecoder(
@@ -381,17 +389,19 @@ class CreativityModel(BaseModel):
         # Embed the questions
         img_feats = self.backbone(images)
         # Encode the images and questions
-        if self.only_image:
-            hiddens = img_feats
-        else:
-            hiddens = self.encoder(img_feats, questions, lenghts)
+
+        hiddens = self.encoder(img_feats, questions, lenghts)
+
+        hiddens = self.dropout(hiddens)
+
         # Project to VaE latent space
         latents, mus, logvars = self.vae(hiddens, mode=mode)
         # Forward all to the decoder
         decoder_hiddens = self.decoder(img_feats, latents, questions, lenghts)
         # Get logits from decoder hiddens
         logits = (
-            decoder_hiddens[0] @ self.hiddens_to_logits_w + self.hiddens_to_logits_b
+            self.dropout(decoder_hiddens) @ self.hiddens_to_logits_w
+            + self.hiddens_to_logits_b
         )
         return logits, mus, logvars
 
@@ -421,7 +431,9 @@ class CreativityModel(BaseModel):
                 (images.shape[0], 0), device=self.device, dtype=torch.long
             )
             for _ in range(max_len):
+                x = self.decoder.ln_embed(x)
                 hiddens, states = self.decoder.rnn(x, states)
+                hiddens = self.decoder.post_ln(hiddens)
                 logits = hiddens @ self.hiddens_to_logits_w + self.hiddens_to_logits_b
                 # Get the most likely token
                 logits = logits[:, -1, :]
@@ -452,29 +464,40 @@ class CreativityEncoder(nn.Module):
     It feeds all this to a GRU and returns the last hidden state of the GRU.
     """
 
-    def __init__(self, hidden_size, vocab_size, device):
+    def __init__(self, hidden_size, vocab_size, device, only_image=False):
         super().__init__()
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
         self.device = device
+        self.only_image = only_image
         # Modules
         self.embedding = nn.Embedding(self.vocab_size, self.hidden_size, padding_idx=0)
         self.rnn = nn.GRU(hidden_size, hidden_size, batch_first=True)
+        self.ln_embeddings = nn.LayerNorm(hidden_size)
+        self.ln_out = nn.LayerNorm(hidden_size)
 
     def forward(self, img_feats, questions, lengths=None):
-        embdedded_questions = self.embedding(questions)
-        # Concatenate image features and token embeddings
-        x = torch.cat((img_feats.unsqueeze(1), embdedded_questions[:, 1:, :]), dim=1)
-        if lengths is not None:
-            x = pack_padded_sequence(x, [l - 1 for l in lengths], batch_first=True)
-        # Feed to GRU
-        x, _ = self.rnn(x)
-        if lengths is not None:
-            x, l = pad_packed_sequence(x, batch_first=True)
-
-        return x[
-            range(img_feats.shape[0]), list(l - 1), :
-        ]  # l is a lenght, so to convert to the index I need to substract 1
+        if self.only_image:
+            return self.ln_out(img_feats)
+        else:
+            embdedded_questions = self.embedding(questions)
+            # Concatenate image features and token embeddings
+            x = torch.cat(
+                (img_feats.unsqueeze(1), embdedded_questions[:, 1:, :]), dim=1
+            )
+            # Apply layernorm
+            x = self.ln_embeddings(x)
+            if lengths is not None:
+                x = pack_padded_sequence(x, [l - 1 for l in lengths], batch_first=True)
+            # Feed to GRU
+            x, _ = self.rnn(x)
+            if lengths is not None:
+                x, l = pad_packed_sequence(x, batch_first=True)
+            # Apply layernorm
+            x = self.ln_out(x)
+            return x[
+                range(img_feats.shape[0]), list(l - 1), :
+            ]  # l is a lenght, so to convert to the index I need to substract 1
 
 
 class BackBone(nn.Module):
@@ -522,6 +545,7 @@ class VaE(nn.Module):
             self.latent_size, self.hidden_size, bias=False
         )
         self.device = device
+        self.ln_hiddens_out = nn.LayerNorm(hidden_size)
 
     def forward(self, x, mode="train"):
         # Project to latent space
@@ -537,14 +561,15 @@ class VaE(nn.Module):
         else:
             raise NotImplementedError
         # Project back to hidden space
-        x = self.latent_to_hidden(z)
+        x = self.ln_hiddens_out(self.latent_to_hidden(z))
+
         return x, mean, logvar
 
     def sample_prior(self, batch_size=1):
         # Sample from prior
         z = torch.randn(batch_size, self.latent_size).to(self.device)
         # Project back to hidden space
-        x = self.latent_to_hidden(z)
+        x = self.ln_hiddens_out(self.latent_to_hidden(z))
         return x
 
 
@@ -565,6 +590,8 @@ class CreativityDecoder(nn.Module):
         self.embedding = nn.Embedding(self.vocab_size, self.hidden_size, padding_idx=0)
         self.rnn = nn.GRU(hidden_size, hidden_size, batch_first=True)
         self.device = device
+        self.ln_embed = nn.LayerNorm(hidden_size)
+        self.post_ln = nn.LayerNorm(hidden_size)
 
     def forward(self, img_feats, latent_codes, questions, lenghts):
         # Questions contains both the start and the end tokens
@@ -574,6 +601,7 @@ class CreativityDecoder(nn.Module):
             (img_feats.unsqueeze(1), latent_codes.unsqueeze(1), embdedded_questions),
             dim=1,
         )
+        x = self.ln_embed(x)
         # Pack the sequence
         x = pack_padded_sequence(x, [l + 1 for l in lenghts], batch_first=True)
         # Feed to GRU
@@ -582,23 +610,5 @@ class CreativityDecoder(nn.Module):
         x = x[:, 2:, :]  # Remove the first two tokens (img feats and latent token)
         # Pack again to be more efficient
         x = pack_padded_sequence(x, [l - 1 for l in lenghts], batch_first=True)
-        return x
-
-
-class OnlyImageEncoder(nn.Module):
-    """
-    Encoder implemented as in https://ieeexplore.ieee.org/document/9671493.
-    It basically consist of a backbone which takes a batch of images and returns a batch of image features.
-    It optionally append on top of it a linear layer that projects the image features to a hidden space of size hidden_size.
-    """
-
-    def __init__(self, backbone_name, hidden_size, freeze=True):
-        super().__init__()
-        self.backbone_name = backbone_name
-        self.hidden_size = hidden_size
-        self.freeze = freeze
-        self.backbone = BackBone(backbone_name, hidden_size, freeze)
-
-    def forward(self, x):
-        x = self.backbone(x)
+        x = self.post_ln(x[0])
         return x
