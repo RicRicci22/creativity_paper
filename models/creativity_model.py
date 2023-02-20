@@ -37,10 +37,10 @@ class Im2QModel(BaseModel):
         self.eos_token = eos_token
         self.device = device
         self.decoder = Im2QDecoder(
-            hidden_size,
-            vocab_size,
-            dropout,
-            sos_token,
+            hidden_size=hidden_size,
+            vocab_size=vocab_size,
+            dropout=dropout,
+            sos_token=sos_token,
             device=device,
             concatenate=concatenate,
         )
@@ -59,7 +59,8 @@ class Im2QModel(BaseModel):
         # Forward to the decoder
         decoder_hiddens = self.decoder(img_feats, questions, lenghts)
         logits = (
-            self.dropout(decoder_hiddens[0]) @ self.hiddens_to_logits_w + self.hiddens_to_logits_b
+            self.dropout(decoder_hiddens) @ self.hiddens_to_logits_w
+            + self.hiddens_to_logits_b
         )
         return logits
 
@@ -291,13 +292,15 @@ class Im2QDecoder(nn.Module):
             self.rnn = nn.GRU(hidden_size * 2, hidden_size, batch_first=True)
         self.concatenate = concatenate
         self.dropout = nn.Dropout(dropout)
+        self.ln = nn.LayerNorm(hidden_size)
 
     def forward(self, img_features, questions, lenghts):
         # Embed the questions
-        embedded = self.dropout(self.embedding(questions))
+        embedded = self.ln(self.embedding(questions))
         if self.concatenate:
             # Concatenate the image features and the embedded questions
             input = torch.cat((img_features.unsqueeze(1), embedded), dim=1)
+            input = self.ln(input)
             # Pack the padded sequence
             packed = pack_padded_sequence(input, lenghts, batch_first=True)
         else:
@@ -305,6 +308,7 @@ class Im2QDecoder(nn.Module):
                 (img_features.unsqueeze(1).expand(-1, embedded.shape[1], -1), embedded),
                 dim=2,
             )
+            input = self.ln(input)
             packed = pack_padded_sequence(
                 input, [l - 1 for l in lenghts], batch_first=True
             )
@@ -320,6 +324,9 @@ class Im2QDecoder(nn.Module):
             packed_output = pack_padded_sequence(
                 padded_output, [l - 1 for l in lenghts], batch_first=True
             )
+        
+        # Not sure if this ln is good
+        packed_output = self.ln(packed_output[0])
 
         return packed_output
 
