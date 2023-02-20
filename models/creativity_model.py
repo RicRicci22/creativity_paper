@@ -288,19 +288,21 @@ class Im2QDecoder(nn.Module):
         self.embedding = nn.Embedding(vocab_size, hidden_size, padding_idx=0)
         if concatenate:
             self.rnn = nn.GRU(hidden_size, hidden_size, batch_first=True)
+            self.embed_ln = nn.LayerNorm(hidden_size)
         else:
             self.rnn = nn.GRU(hidden_size * 2, hidden_size, batch_first=True)
+            self.embed_ln = nn.LayerNorm(hidden_size * 2)
         self.concatenate = concatenate
         self.dropout = nn.Dropout(dropout)
-        self.ln = nn.LayerNorm(hidden_size)
+        self.post_ln = nn.LayerNorm(hidden_size)
 
     def forward(self, img_features, questions, lenghts):
         # Embed the questions
-        embedded = self.ln(self.embedding(questions))
+        embedded = self.embedding(questions)
         if self.concatenate:
             # Concatenate the image features and the embedded questions
             input = torch.cat((img_features.unsqueeze(1), embedded), dim=1)
-            input = self.ln(input)
+            input = self.embed_ln(input)
             # Pack the padded sequence
             packed = pack_padded_sequence(input, lenghts, batch_first=True)
         else:
@@ -308,7 +310,7 @@ class Im2QDecoder(nn.Module):
                 (img_features.unsqueeze(1).expand(-1, embedded.shape[1], -1), embedded),
                 dim=2,
             )
-            input = self.ln(input)
+            input = self.embed_ln(input)
             packed = pack_padded_sequence(
                 input, [l - 1 for l in lenghts], batch_first=True
             )
@@ -324,9 +326,9 @@ class Im2QDecoder(nn.Module):
             packed_output = pack_padded_sequence(
                 padded_output, [l - 1 for l in lenghts], batch_first=True
             )
-        
+
         # Not sure if this ln is good
-        packed_output = self.ln(packed_output[0])
+        packed_output = self.post_ln(packed_output[0])
 
         return packed_output
 
