@@ -6,7 +6,7 @@
         "type": "CreativityModel",
         "args":{
             "backbone_name":"resnet18",
-            "hidden_size":512,
+            "hidden_size":256,
             "latent_size":20,
             "only_image": false,
             "dropout": 0.2

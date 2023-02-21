@@ -9,7 +9,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 # For beam_decoding
 import operator
 from queue import PriorityQueue
-from utils import BeamSearchNode
+from utils import BeamSearchNode, cross_entropy_loss, kl_loss
 
 
 class Im2QModel(BaseModel):
@@ -405,7 +405,7 @@ class CreativityModel(BaseModel):
         )
         return logits, mus, logvars
 
-    def sample(self, images, max_len=50):
+    def sample(self, images, max_len=50, multinomial=True):
         self.eval()
         with torch.no_grad():
             # Sample from prior and decode a question for the image
@@ -438,7 +438,10 @@ class CreativityModel(BaseModel):
                 # Get the most likely token
                 logits = logits[:, -1, :]
                 probs = F.softmax(logits, dim=1)
-                predicted = torch.multinomial(probs, num_samples=1)
+                if multinomial:
+                    predicted = torch.multinomial(probs, num_samples=1)
+                else:
+                    predicted = torch.argmax(probs, dim=1).unsqueeze(1)
                 # Add the predicted token to the output
                 output = torch.cat((output, predicted), dim=1)
                 # Get the embedding of the predicted token
@@ -453,6 +456,12 @@ class CreativityModel(BaseModel):
 
         self.train()
         return output.clone().detach().requires_grad_(False)
+
+    def get_loss(output, target, mean=None, logvar=None):
+        if mean == None and logvar == None:
+            return cross_entropy_loss(output, target)
+        else:
+            return cross_entropy_loss(output, target), kl_loss(mean, logvar)
 
 
 class CreativityEncoder(nn.Module):

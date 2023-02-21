@@ -7,6 +7,7 @@ from collections import OrderedDict
 from torch.nn.utils.rnn import pad_sequence
 import numpy as np
 import random
+import torch.nn.functional as F
 
 
 def ensure_dir(dirname):
@@ -135,22 +136,9 @@ class BeamSearchNode(object):
         return 1 - self.cumul_prob + alpha * reward
 
 
-class custom_ln(torch.nn.Module):
-    """
-    Custom implementation of layer norm that takes into consideration the padding tokens, without using them to calculate the mean over the sequence.
-    It is to be considered for NLP tasks, it normalizes along the embedding dimension for batches of sequences.
-    Inputs:
-    d_model: dimensionality of the input embeddings (int)
-    """
+def cross_entropy_loss(output, target):
+    return F.cross_entropy(output, target, ignore_index=0)
 
-    def __init__(self, d_model, pad_id=0, eps=1e-6):
-        super(custom_ln, self).__init__()
-        self.a_2 = torch.nn.Parameter(torch.ones(d_model))
-        self.b_2 = torch.nn.Parameter(torch.zeros(d_model))
-        self.eps = eps
-        self.pad_id = pad_id
 
-    def forward(self, x):
-        x = x - torch.mean(x, dim=-1, keepdim=True)
-        x = x / torch.sqrt(torch.var(x, dim=-1, keepdim=True) + self.eps)
-        return self.a_2 * x + self.b_2
+def kl_loss(mean, logvar):
+    return -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())

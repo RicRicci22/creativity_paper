@@ -60,20 +60,20 @@ def main(config):
             image = image.unsqueeze(0)  # to simulate batch size
             image = image.to(device)
             question = model.sample(image, max_len=50, multinomial=True)
-            question = model.beam_decode(image, max_len=50, beam_width=3, topk=1)
-            for b in question:
-                for topk in b:
-                    st.text(topk[0])
-                    st.text(data_loader.tokenizer.decode(topk[1]))
-            # for i, question in enumerate(question):
-            #     # Convert to list
-            #     question = question.tolist()
-            #     eos_position = question.index(3)
-            #     if eos_position != -1:
-            #         question = question[:eos_position]
-            #         st.text(data_loader.tokenizer.decode(question))
-            #     else:
-            #         st.text(data_loader.tokenizer.decode(question))
+            # question = model.beam_decode(image, max_len=50, beam_width=3, topk=1)
+            # for b in question:
+            #     for topk in b:
+            #         st.text(topk[0])
+            #         st.text(data_loader.tokenizer.decode(topk[1]))
+            for i, question in enumerate(question):
+                # Convert to list
+                question = question.tolist()
+                eos_position = question.index(3)
+                if eos_position != -1:
+                    question = question[:eos_position]
+                    st.text(data_loader.tokenizer.decode(question))
+                else:
+                    st.text(data_loader.tokenizer.decode(question))
 
 
 if __name__ == "__main__":
